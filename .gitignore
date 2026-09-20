@@ -1,0 +1,14 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.log
+*.webm
+**/*.sqlite
+.env
+.DS_Store
+.idea/
+.vscode/
+videos/
+paper/

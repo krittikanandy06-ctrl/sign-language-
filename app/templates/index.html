@@ -1,0 +1,618 @@
+{% extends 'base.html' %}
+{% block title %}ASL Sentence Recognition Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0">
+  <!-- Dashboard Top Header -->
+  <div class="dash-header">
+    <div>
+      <h1 class="dash-title">ASL Fingerspelling & Sentence Studio</h1>
+      <p class="dash-subtitle">28-Class American Sign Language recognition with hold-to-commit & dynamic speech synthesis</p>
+    </div>
+    
+    <div class="d-flex align-items-center gap-2">
+      <!-- Sign Guide Button -->
+      <button class="btn-app btn-app-secondary" data-bs-toggle="modal" data-bs-target="#aslGuideModal" title="View all 28 ASL hand gestures">
+        <i class='bx bx-book-open'></i>
+        <span>Sign Guide (A–Z)</span>
+      </button>
+
+      <!-- Voice Toggle -->
+      <button id="ttsToggleBtn" class="btn-app btn-app-secondary" onclick="toggleTTS()" title="Toggle voice readout">
+        <i class='bx bx-volume-full' id="ttsIcon"></i>
+        <span id="ttsStatusText">Audio: ON</span>
+      </button>
+
+      <!-- System Status Pill -->
+      <div id="statusBadge" class="status-pill">
+        <span class="status-dot"></span>
+        <span id="statusText">Standby</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <!-- Left Column: Camera Viewport & Live Sentence Studio -->
+    <div class="col-lg-7 col-xl-8">
+      <div class="app-card p-3">
+        <div class="video-viewport">
+          <img id="videoFeed" src="{{ url_for('video_feed') }}" alt="Live Camera Stream">
+          
+          <div class="viewport-overlay-bar">
+            <div class="overlay-tag">
+              <i class='bx bx-video me-1'></i> STREAM
+            </div>
+            <div class="overlay-tag">
+              <span id="fpsChip">0 FPS</span> • ASL 28-CLASS
+            </div>
+          </div>
+        </div>
+
+        <!-- Camera Controls Toolbar -->
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3 pt-2 border-top" style="border-color: var(--border-subtle) !important;">
+          <div class="d-flex align-items-center gap-2">
+            <button id="toggleBtn" class="btn-app btn-app-primary" onclick="toggleRecognition()">
+              <i class='bx bx-play'></i> <span>Start Recognition</span>
+            </button>
+
+            <button class="btn-app btn-app-secondary" onclick="sendAction('clear')" title="Clear all buffers">
+              <i class='bx bx-trash'></i> Clear All
+            </button>
+          </div>
+
+          <div class="text-muted" style="font-size: 12px;" id="engineHint">
+            <i class='bx bx-info-circle me-1'></i> Hold steady for ~0.5s to commit each letter
+          </div>
+        </div>
+      </div>
+
+      <!-- Word Buffer & Sentence Accumulator -->
+      <div class="app-card sentence-builder-card">
+        <!-- Live Typing Buffer -->
+        <div class="mb-3">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="section-label">Current Word Buffer</span>
+            <span id="charHoldMeta" class="text-muted" style="font-size: 11px;">Hold sign to type</span>
+          </div>
+          
+          <div class="typing-buffer-container mb-2">
+            <span id="currentWordDisplay" style="color: var(--accent-success); letter-spacing: 2px;"></span>
+            <span class="typing-cursor"></span>
+          </div>
+
+          <!-- Hold Progress Bar -->
+          <div class="hold-progress-track">
+            <div id="holdProgressFill" class="hold-progress-fill"></div>
+          </div>
+        </div>
+
+        <!-- Autocomplete Suggestions -->
+        <div class="mb-3">
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <i class='bx bx-bulb' style="color: var(--accent-warning); font-size: 14px;"></i>
+            <span class="section-label" style="font-size: 11.5px;">Word Suggestions (Click to complete)</span>
+          </div>
+          <div id="autocompleteList" class="autocomplete-container">
+            <span class="text-muted fst-italic" style="font-size: 12px;">Start spelling a word to see suggestions...</span>
+          </div>
+        </div>
+
+        <!-- Full Assembled Sentence -->
+        <div>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="d-flex align-items-center gap-2">
+              <i class='bx bx-message-square-dots' style="font-size: 18px; color: var(--text-secondary);"></i>
+              <span style="font-weight: 600; font-size: 14px;">Assembled Sentence</span>
+            </div>
+            <span class="text-muted" style="font-size: 12px;" id="wordCount">0 words</span>
+          </div>
+
+          <div id="sentenceDisplay" class="sentence-display-box" style="font-size: 16px; font-weight: 500;">
+            <span class="text-muted fst-italic" id="emptySentenceHint" style="font-size: 13px;">
+              Sentence appears here as words are completed...
+            </span>
+          </div>
+
+          <!-- Quick Action Buttons -->
+          <div class="d-flex gap-2 justify-content-between flex-wrap">
+            <div class="d-flex gap-2">
+              <button class="btn-app btn-app-secondary py-1 px-3" onclick="sendAction('space')" title="Add space between words">
+                <i class='bx bx-space-bar'></i> Space
+              </button>
+              <button class="btn-app btn-app-secondary py-1 px-3" onclick="sendAction('backspace')" title="Backspace last letter">
+                <i class='bx bx-backspace'></i> Delete
+              </button>
+            </div>
+
+            <div class="d-flex gap-2">
+              <button class="btn-app btn-app-secondary py-1 px-3" onclick="copySentence()" title="Copy sentence text">
+                <i class='bx bx-copy'></i> Copy
+              </button>
+              <button class="btn-app btn-app-primary py-1 px-3" onclick="speakSentence()" title="Speak aloud using speech synthesis">
+                <i class='bx bx-volume-full'></i> Speak Sentence
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Live Detection & ASL Key Matrix -->
+    <div class="col-lg-5 col-xl-4">
+      <!-- Active Detection Card -->
+      <div class="app-card detection-card mb-4">
+        <div class="detection-header">
+          <span class="section-label">Current Candidate Sign</span>
+          <span id="stabilityBadge" class="detection-state-tag">Standby</span>
+        </div>
+
+        <div class="detection-display-box">
+          <div id="currentPrediction" class="detection-word" style="font-size: 48px; letter-spacing: 2px;">
+            --
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top" style="border-color: var(--border-subtle) !important;">
+          <span class="text-muted" style="font-size: 12px;">Confidence: <strong id="confidenceVal" style="color: var(--text-primary);">0.0%</strong></span>
+          <span class="text-muted" style="font-size: 12px;">Hand: <strong id="handLabel" style="color: var(--text-primary);">None</strong></span>
+        </div>
+      </div>
+
+      <!-- ASL Alphabet Interactive Matrix -->
+      <div class="app-card p-3">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <div class="d-flex align-items-center gap-2">
+            <i class='bx bx-grid-alt' style="color: var(--accent-primary); font-size: 16px;"></i>
+            <span style="font-weight: 600; font-size: 13.5px;">ASL Vocabulary Matrix (28 Classes)</span>
+          </div>
+          <button class="btn btn-sm btn-outline-primary" style="font-size: 11px; padding: 2px 8px; border-radius: 4px;" data-bs-toggle="modal" data-bs-target="#aslGuideModal">
+            <i class='bx bx-book-open me-1'></i> Full Guide
+          </button>
+        </div>
+        
+        <p class="text-muted mb-2" style="font-size: 12px; line-height: 1.4;">
+          Letters A-Z, Space (SPC), and Delete (DEL). Click any key to inspect posture:
+        </p>
+
+        <!-- 28 Classes Grid -->
+        <div class="asl-key-matrix" id="aslMatrix">
+          <!-- A-Z -->
+          <div class="asl-key" data-char="A" onclick="inspectSign('A')">A</div>
+          <div class="asl-key" data-char="B" onclick="inspectSign('B')">B</div>
+          <div class="asl-key" data-char="C" onclick="inspectSign('C')">C</div>
+          <div class="asl-key" data-char="D" onclick="inspectSign('D')">D</div>
+          <div class="asl-key" data-char="E" onclick="inspectSign('E')">E</div>
+          <div class="asl-key" data-char="F" onclick="inspectSign('F')">F</div>
+          <div class="asl-key" data-char="G" onclick="inspectSign('G')">G</div>
+          <div class="asl-key" data-char="H" onclick="inspectSign('H')">H</div>
+          <div class="asl-key" data-char="I" onclick="inspectSign('I')">I</div>
+          <div class="asl-key" data-char="J" onclick="inspectSign('J')">J</div>
+          <div class="asl-key" data-char="K" onclick="inspectSign('K')">K</div>
+          <div class="asl-key" data-char="L" onclick="inspectSign('L')">L</div>
+          <div class="asl-key" data-char="M" onclick="inspectSign('M')">M</div>
+          <div class="asl-key" data-char="N" onclick="inspectSign('N')">N</div>
+          <div class="asl-key" data-char="O" onclick="inspectSign('O')">O</div>
+          <div class="asl-key" data-char="P" onclick="inspectSign('P')">P</div>
+          <div class="asl-key" data-char="Q" onclick="inspectSign('Q')">Q</div>
+          <div class="asl-key" data-char="R" onclick="inspectSign('R')">R</div>
+          <div class="asl-key" data-char="S" onclick="inspectSign('S')">S</div>
+          <div class="asl-key" data-char="T" onclick="inspectSign('T')">T</div>
+          <div class="asl-key" data-char="U" onclick="inspectSign('U')">U</div>
+          <div class="asl-key" data-char="V" onclick="inspectSign('V')">V</div>
+          <div class="asl-key" data-char="W" onclick="inspectSign('W')">W</div>
+          <div class="asl-key" data-char="X" onclick="inspectSign('X')">X</div>
+          <div class="asl-key" data-char="Y" onclick="inspectSign('Y')">Y</div>
+          <div class="asl-key" data-char="Z" onclick="inspectSign('Z')">Z</div>
+          <div class="asl-key" data-char="space" onclick="inspectSign('space')" style="grid-column: span 1; font-size: 10px;">SPC</div>
+          <div class="asl-key" data-char="del" onclick="inspectSign('del')" style="grid-column: span 1; font-size: 10px;">DEL</div>
+        </div>
+
+        <!-- Interactive Hand Pose Inspector Box -->
+        <div class="asl-inspector-card mt-3" id="aslInspector">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span style="font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Sign Anatomy</span>
+            <span id="inspectorCharBadge" class="badge" style="background: rgba(37,99,235,0.25); color: #60a5fa; font-family: monospace; font-size: 12px;">Sign: A</span>
+          </div>
+          <div id="inspectorDesc" style="font-size: 12px; color: var(--text-secondary); line-height: 1.45;">
+            ✊ <strong>Closed fist</strong> with thumb resting straight upright along the side of the index finger.
+          </div>
+          <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top" style="border-color: var(--border-subtle) !important;">
+            <span class="text-muted" style="font-size: 11px;">Click any key to preview pose</span>
+            <button class="btn btn-sm p-0 text-primary" style="font-size: 11.5px; text-decoration: none;" data-bs-toggle="modal" data-bs-target="#aslGuideModal">
+              View All 28 Signs &rarr;
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ASL Sign Reference Guide Modal -->
+<div class="modal fade" id="aslGuideModal" tabindex="-1" aria-labelledby="aslGuideModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
+    <div class="modal-content" style="background: var(--bg-card); border: 1px solid var(--border-medium); border-radius: var(--radius-md);">
+      <div class="modal-header border-bottom" style="border-color: var(--border-subtle) !important;">
+        <div>
+          <h5 class="modal-title text-white d-flex align-items-center gap-2" id="aslGuideModalLabel">
+            <i class='bx bx-book-open' style="color: var(--accent-primary);"></i>
+            ASL 28-Sign Reference Guide & Hand Chart
+          </h5>
+          <p class="text-muted mb-0" style="font-size: 12px;">American Sign Language Fingerspelling Alphabet, Control Signs & Word Formation</p>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body p-4">
+        <!-- How Sentence Formation Works Banner -->
+        <div class="p-3 mb-4 rounded" style="background: rgba(37, 99, 235, 0.08); border: 1px solid rgba(37, 99, 235, 0.2);">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <i class='bx bx-bulb' style="color: var(--accent-warning); font-size: 18px;"></i>
+            <strong style="color: var(--text-primary); font-size: 13.5px;">How do Signs Form Words and Sentences?</strong>
+          </div>
+          <div class="row g-2 text-secondary" style="font-size: 12px; line-height: 1.5;">
+            <div class="col-md-6">
+              <span class="text-white fw-semibold">1. Fingerspelling (A–Z):</span> Form hand gestures one by one to spell words (e.g. <code>H</code> &rarr; <code>E</code> &rarr; <code>L</code> &rarr; <code>P</code>).
+            </div>
+            <div class="col-md-6">
+              <span class="text-white fw-semibold">2. Hold-to-Commit (~0.5s):</span> Hold each sign steady until the green progress meter reaches 100% to commit the letter.
+            </div>
+            <div class="col-md-6">
+              <span class="text-white fw-semibold">3. Predictive Autocomplete:</span> Click suggested word chips (e.g. <code>HELLO</code>, <code>WATER</code>) to complete words instantly.
+            </div>
+            <div class="col-md-6">
+              <span class="text-white fw-semibold">4. Control Signs:</span> Make the <code>Space</code> sign to finish a word and hear TTS audio; make <code>Delete</code> to backspace.
+            </div>
+          </div>
+        </div>
+
+        <!-- 28 Sign Alphabet Cards Grid -->
+        <h6 class="text-white mb-3 d-flex align-items-center gap-2" style="font-size: 13px; font-weight: 600;">
+          <i class='bx bx-grid-alt text-primary'></i> Complete 28-Sign Hand Posture Dictionary
+        </h6>
+
+        <div class="asl-sign-grid" id="modalSignGrid">
+          <!-- Dynamically populated from SIGN_DESCRIPTIONS in JS -->
+        </div>
+      </div>
+
+      <div class="modal-footer border-top" style="border-color: var(--border-subtle) !important;">
+        <span class="text-muted me-auto" style="font-size: 12px;">Tip: Both left and right hands are mirrored and supported automatically.</span>
+        <button type="button" class="btn-app btn-app-primary py-1 px-3" data-bs-dismiss="modal">Close Guide</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  let isRunning = false;
+  let pollInterval = null;
+  let isToggling = false;
+  let ttsEnabled = true;
+  let lastSpokenText = "";
+  let lastActiveChar = null;
+
+  // Web Speech API Synthesis
+  function speakSentence(overrideText) {
+    if (!('speechSynthesis' in window)) return;
+    const text = overrideText || getSentenceText();
+    if (!text || text.trim() === "") return;
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function toggleTTS() {
+    ttsEnabled = !ttsEnabled;
+    const icon = document.getElementById('ttsIcon');
+    const text = document.getElementById('ttsStatusText');
+    if (ttsEnabled) {
+      icon.className = 'bx bx-volume-full';
+      text.innerText = 'Audio: ON';
+      speakSentence("Audio readout enabled");
+    } else {
+      icon.className = 'bx bx-volume-mute';
+      text.innerText = 'Audio: OFF';
+      window.speechSynthesis.cancel();
+    }
+  }
+
+  function getSentenceText() {
+    const word = (document.getElementById('currentWordDisplay').innerText || "").trim();
+    const sentence = (document.getElementById('sentenceDisplay').innerText || "").trim();
+    if (sentence.includes("Sentence appears here")) {
+      return word;
+    }
+    return (sentence + (word ? " " + word : "")).trim();
+  }
+
+  function copySentence() {
+    const text = getSentenceText();
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = event.currentTarget;
+      const originalHtml = btn.innerHTML;
+      btn.innerHTML = "<i class='bx bx-check'></i> Copied!";
+      setTimeout(() => btn.innerHTML = originalHtml, 1500);
+    });
+  }
+
+  // Interactive Backend Actions
+  async function sendAction(action, extraData = {}) {
+    try {
+      const payload = { action, ...extraData };
+      const res = await fetch('/api/sentence/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        updateSentenceUI(data.state);
+      }
+    } catch (err) {
+      console.error("Action error:", err);
+    }
+  }
+
+  function selectSuggestion(word) {
+    sendAction('suggestion', { word });
+    if (ttsEnabled) {
+      speakSentence(word);
+    }
+  }
+
+  // Toggle Camera Recognition
+  async function toggleRecognition() {
+    if (isToggling) return;
+    isToggling = true;
+
+    const btn = document.getElementById('toggleBtn');
+    const badge = document.getElementById('statusBadge');
+    const statusText = document.getElementById('statusText');
+
+    const nextAction = isRunning ? 'stop' : 'start';
+
+    try {
+      btn.disabled = true;
+      btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span> ${nextAction === 'start' ? 'Starting...' : 'Stopping...'}`;
+
+      const res = await fetch('/toggle_recognition', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: nextAction })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        isRunning = (data.status === 'started');
+        if (isRunning) {
+          badge.classList.add('status-live');
+          statusText.innerText = 'Live Recognition';
+          btn.className = 'btn-app btn-app-danger';
+          btn.innerHTML = `<i class='bx bx-stop'></i> <span>Stop Recognition</span>`;
+          startPolling();
+        } else {
+          badge.classList.remove('status-live');
+          statusText.innerText = 'Standby';
+          btn.className = 'btn-app btn-app-primary';
+          btn.innerHTML = `<i class='bx bx-play'></i> <span>Start Recognition</span>`;
+          stopPolling();
+          resetDetectionDisplays();
+        }
+      } else {
+        alert(data.message || 'Action failed.');
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      btn.disabled = false;
+      isToggling = false;
+    }
+  }
+
+  function startPolling() {
+    if (pollInterval) clearInterval(pollInterval);
+    pollInterval = setInterval(fetchPredictions, 120);
+  }
+
+  function stopPolling() {
+    if (pollInterval) clearInterval(pollInterval);
+    pollInterval = null;
+  }
+
+  // Poll Predictions & Sentence State
+  async function fetchPredictions() {
+    if (!isRunning) return;
+
+    try {
+      const res = await fetch('/current_predictions');
+      const data = await res.json();
+
+      if (data.status === 'success') {
+        updateDetectionUI(data);
+      }
+    } catch (err) {
+      console.error("Prediction poll error:", err);
+    }
+  }
+
+  function updateDetectionUI(data) {
+    // 1. Current Prediction & Hold Progress
+    const charDisplay = document.getElementById('currentPrediction');
+    const progressFill = document.getElementById('holdProgressFill');
+    const confidenceVal = document.getElementById('confidenceVal');
+    const handLabel = document.getElementById('handLabel');
+    const stabilityBadge = document.getElementById('stabilityBadge');
+    const fpsChip = document.getElementById('fpsChip');
+
+    const char = data.current_char || "--";
+    charDisplay.innerText = char;
+    progressFill.style.width = `${data.char_progress || 0}%`;
+    confidenceVal.innerText = `${data.confidence || 0}%`;
+    handLabel.innerText = data.handedness || "None";
+    fpsChip.innerText = `${data.fps || 0} FPS`;
+
+    if (data.char_progress > 75) {
+      stabilityBadge.innerText = "Committing...";
+      stabilityBadge.className = "detection-state-tag tag-stable";
+    } else if (data.char_progress > 20) {
+      stabilityBadge.innerText = "Holding";
+      stabilityBadge.className = "detection-state-tag";
+    } else {
+      stabilityBadge.innerText = data.engine_status || "Tracking";
+      stabilityBadge.className = "detection-state-tag";
+    }
+
+    // 2. Highlight key in ASL Matrix
+    highlightKey(char);
+
+    // 3. Update Sentence & Word Display
+    updateSentenceUI(data);
+  }
+
+  function highlightKey(char) {
+    if (char === lastActiveChar) return;
+    if (lastActiveChar) {
+      const oldKey = document.querySelector(`.asl-key[data-char="${lastActiveChar}"]`);
+      if (oldKey) oldKey.classList.remove('active-sign');
+    }
+    if (char && char !== "--") {
+      const newKey = document.querySelector(`.asl-key[data-char="${char}"]`);
+      if (newKey) newKey.classList.add('active-sign');
+      lastActiveChar = char;
+    } else {
+      lastActiveChar = null;
+    }
+  }
+
+  function updateSentenceUI(state) {
+    // Current Word Buffer
+    const wordDisplay = document.getElementById('currentWordDisplay');
+    wordDisplay.innerText = state.current_word || "";
+
+    // Assembled Sentence
+    const sentenceDisplay = document.getElementById('sentenceDisplay');
+    const wordCount = document.getElementById('wordCount');
+
+    if (state.sentence && state.sentence.trim()) {
+      sentenceDisplay.innerText = state.sentence;
+      const count = state.sentence.trim().split(/\s+/).length;
+      wordCount.innerText = `${count} word${count === 1 ? '' : 's'}`;
+    } else {
+      sentenceDisplay.innerHTML = '<span class="text-muted fst-italic" style="font-size: 13px;">Sentence appears here as words are completed...</span>';
+      wordCount.innerText = "0 words";
+    }
+
+    // Autocomplete Suggestions Chips
+    const suggestionsContainer = document.getElementById('autocompleteList');
+    if (state.suggestions && state.suggestions.length > 0) {
+      suggestionsContainer.innerHTML = state.suggestions.map(s => 
+        `<span class="suggestion-chip" onclick="selectSuggestion('${s}')"><i class='bx bx-check'></i> ${s}</span>`
+      ).join('');
+    } else if (state.current_word) {
+      suggestionsContainer.innerHTML = `<span class="text-muted" style="font-size: 12px;">No suggestions for "${state.current_word}"</span>`;
+    } else {
+      suggestionsContainer.innerHTML = `<span class="text-muted fst-italic" style="font-size: 12px;">Start spelling a word to see suggestions...</span>`;
+    }
+  }
+
+  // Complete ASL 28-Sign Anatomy & Hand Posture Dictionary
+  const SIGN_DESCRIPTIONS = {
+    "A": { title: "Letter A", emoji: "✊", desc: "Closed fist with thumb resting straight upright along the outer side of the index finger." },
+    "B": { title: "Letter B", emoji: "✋", desc: "Four fingers held flat and upright together; thumb folded flat across the front of the palm." },
+    "C": { title: "Letter C", emoji: "🤏", desc: "Curved fingers and thumb forming a 'C' arc shape, like gripping an open coffee mug." },
+    "D": { title: "Letter D", emoji: "☝️", desc: "Index finger points straight up; other three fingers curl to touch the thumb tip, forming an 'O' loop." },
+    "E": { title: "Letter E", emoji: "✊", desc: "All four fingertips curled tightly down, resting directly on top of the tucked thumb." },
+    "F": { title: "Letter F", emoji: "👌", desc: "Index finger and thumb touch tips forming an 'O' circle ('OK' sign); middle, ring, and pinky stay spread upright." },
+    "G": { title: "Letter G", emoji: "👉", desc: "Index finger and thumb extended horizontally forward parallel to each other like a pinch." },
+    "H": { title: "Letter H", emoji: "✌️", desc: "Index and middle fingers extended horizontally forward held together; thumb tucked underneath." },
+    "I": { title: "Letter I", emoji: "🤙", desc: "Pinky finger points straight up; other three fingers curled into a fist with thumb folded across them." },
+    "J": { title: "Letter J", emoji: "🤙", desc: "Start in 'I' pose (pinky up) and swoop pinky down to trace a curved 'J' motion in the air." },
+    "K": { title: "Letter K", emoji: "✌️", desc: "Index finger straight up, middle finger angled forward; thumb rests between them against middle finger knuckle." },
+    "L": { title: "Letter L", emoji: "👆", desc: "Index finger points straight up, thumb extends out horizontally at 90° right angle forming an 'L'." },
+    "M": { title: "Letter M", emoji: "✊", desc: "Fist with thumb tucked underneath the first three fingers (index, middle, and ring drape over thumb)." },
+    "N": { title: "Letter N", emoji: "✊", desc: "Fist with thumb tucked underneath the first two fingers (index and middle drape over thumb)." },
+    "O": { title: "Letter O", emoji: "👌", desc: "All fingers curved down to meet the thumb tip, forming a circular 'O' shape." },
+    "P": { title: "Letter P", emoji: "👇", desc: "Downward 'K' sign: hand pointing downwards with index finger horizontal and middle finger pointing down." },
+    "Q": { title: "Letter Q", emoji: "👇", desc: "Downward 'G' sign: index finger and thumb pointed straight down like picking up a coin." },
+    "R": { title: "Letter R", emoji: "🤞", desc: "Index and middle fingers crossed over each other like wishing for 'good luck'." },
+    "S": { title: "Letter S", emoji: "👊", desc: "Tight fist with thumb folded horizontally across the front of all curled fingers (unlike A)." },
+    "T": { title: "Letter T", emoji: "✊", desc: "Fist with thumb tucked between index and middle fingers, thumb tip poking out between them." },
+    "U": { title: "Letter U", emoji: "✌️", desc: "Index and middle fingers extended straight up, held tightly together (palm forward)." },
+    "V": { title: "Letter V", emoji: "✌️", desc: "Peace sign: index and middle fingers extended straight up and spread apart in a 'V' shape." },
+    "W": { title: "Letter W", emoji: "🖐️", desc: "Three fingers up: index, middle, and ring fingers extended upright and spread apart in a 'W' shape." },
+    "X": { title: "Letter X", emoji: "☝️", desc: "Fist with index finger bent at the knuckle into a hooked shape (like a pirate's hook)." },
+    "Y": { title: "Letter Y", emoji: "🤙", desc: "Hang loose / Shaka sign: thumb and pinky extended out sideways, middle three fingers folded." },
+    "Z": { title: "Letter Z", emoji: "👉", desc: "Index finger extended forward, drawing the zigzag strokes of the letter 'Z' in the air." },
+    "space": { title: "Space (SPC)", emoji: "🫲", desc: "Flat open palm held horizontally facing downwards, committing the current word into the sentence." },
+    "del": { title: "Delete (DEL)", emoji: "🔙", desc: "Closed fist with thumb pointed down or horizontal wave, erasing the last typed character (Backspace)." }
+  };
+
+  function inspectSign(char) {
+    const info = SIGN_DESCRIPTIONS[char] || { title: `Sign ${char}`, emoji: "✋", desc: "Hold hand clearly in camera view." };
+    const badge = document.getElementById('inspectorCharBadge');
+    const desc = document.getElementById('inspectorDesc');
+    if (badge) badge.innerText = `${info.emoji} ${info.title}`;
+    if (desc) desc.innerHTML = `<strong>${info.emoji} ${info.title}:</strong> ${info.desc}`;
+  }
+
+  function populateModalGuide() {
+    const grid = document.getElementById('modalSignGrid');
+    if (!grid) return;
+    
+    let html = '';
+    for (const [key, item] of Object.entries(SIGN_DESCRIPTIONS)) {
+      html += `
+        <div class="asl-sign-card">
+          <div class="asl-badge-large">${key === 'space' ? 'SPC' : (key === 'del' ? 'DEL' : key)}</div>
+          <div>
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <strong class="text-white" style="font-size: 13.5px;">${item.emoji} ${item.title}</strong>
+            </div>
+            <p class="text-muted mb-0" style="font-size: 11.5px; line-height: 1.45;">${item.desc}</p>
+          </div>
+        </div>
+      `;
+    }
+    grid.innerHTML = html;
+  }
+
+  function resetDetectionDisplays() {
+    document.getElementById('currentPrediction').innerText = "--";
+    document.getElementById('holdProgressFill').style.width = "0%";
+    document.getElementById('confidenceVal').innerText = "0.0%";
+    document.getElementById('handLabel').innerText = "None";
+    document.getElementById('stabilityBadge').innerText = "Standby";
+    document.getElementById('fpsChip').innerText = "0 FPS";
+    highlightKey(null);
+  }
+
+  // Initialize status and guide on load
+  document.addEventListener('DOMContentLoaded', async () => {
+    populateModalGuide();
+    inspectSign('A');
+
+    try {
+      const res = await fetch('/recognition_status');
+      const data = await res.json();
+      if (data.is_running) {
+        isRunning = true;
+        const btn = document.getElementById('toggleBtn');
+        const badge = document.getElementById('statusBadge');
+        const statusText = document.getElementById('statusText');
+        badge.classList.add('status-live');
+        statusText.innerText = 'Live Recognition';
+        btn.className = 'btn-app btn-app-danger';
+        btn.innerHTML = `<i class='bx bx-stop'></i> <span>Stop Recognition</span>`;
+        startPolling();
+      }
+    } catch (e) {}
+  });
+</script>
+{% endblock %}

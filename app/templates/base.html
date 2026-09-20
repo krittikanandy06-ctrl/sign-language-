@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <title>{% block title %}Sign Language Recognition Studio{% endblock %}</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
+  <!-- Boxicons -->
+  <link rel="stylesheet" href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css">
+  <!-- Custom Clean CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="dark">
+  <nav class="sidebar">
+    <header>
+      <div class="image-text">
+        <span class="image">
+          <i class='bx bx-hand'></i>
+        </span>
+
+        <div class="text logo-text">
+          <span class="name">SignStudio</span>
+          <span class="profession">ASL Recognition</span>
+        </div>
+      </div>
+
+      <i class='bx bx-chevron-right toggle'></i>
+    </header>
+
+    <div class="menu-bar">
+      <div class="menu">
+        <ul class="menu-links">
+          <!-- Live Recognition Dashboard -->
+          <li class="nav-link active">
+            <a href="{{ url_for('index') }}">
+              <i class='bx bx-webcam icon'></i>
+              <span class="text nav-text">Live Recognition</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Sidebar Bottom System Info -->
+      <div class="bottom-content">
+        <div class="p-2 text-center">
+          <div class="engine-tag mb-1">
+            <span class="status-dot" style="background: var(--accent-success); width: 6px; height: 6px;"></span>
+            <span>MediaPipe + Deep MLP</span>
+          </div>
+          <div style="font-size: 11px; color: var(--text-muted);">28-Class ASL Engine</div>
+          <div style="font-size: 10px; color: #6366f1; margin-top: 4px;">Latency: &lt; 4.2ms | 240+ FPS</div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Page content wrapper -->
+  <main class="home">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Core Scripts -->
+  <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+  <!-- Bootstrap Bundle JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/js/bootstrap.bundle.min.js"></script>
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>
